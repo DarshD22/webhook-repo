@@ -5,7 +5,7 @@ function App() {
 
   const fetchEvents = async () => {
     try {
-      const res = await fetch("http://localhost:5000/events");
+      const res = await fetch("https://webhook-repo-8ccs.onrender.com/events");
       const data = await res.json();
       setEvents(data);
     } catch (err) {
