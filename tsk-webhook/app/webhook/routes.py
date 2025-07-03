@@ -4,6 +4,9 @@ from app.extensions import mongo
 
 webhook = Blueprint('webhook', __name__)
 
+# In-memory set to track sent event IDs (in production, consider using Redis)
+sent_event_ids = set()
+
 @webhook.route('/webhook', methods=['POST'])
 def github_webhook():
     payload = request.json
@@ -16,7 +19,7 @@ def github_webhook():
             "author": payload['pusher']['name'],
             "from_branch": None,
             "to_branch": payload['ref'].split('/')[-1],
-            "timestamp": datetime.utcnow()  # Store as datetime object
+            "timestamp": datetime.utcnow()
         }
 
     elif 'pull_request' in payload:
@@ -28,7 +31,7 @@ def github_webhook():
             "author": pr['user']['login'],
             "from_branch": pr['head']['ref'],
             "to_branch": pr['base']['ref'],
-            "timestamp": datetime.utcnow()  # Store as datetime object
+            "timestamp": datetime.utcnow()
         }
 
     else:
@@ -40,18 +43,45 @@ def github_webhook():
 
 @webhook.route('/events', methods=['GET'])
 def get_events():
-    # Only fetch events from the last 20 seconds
-    cutoff_time = datetime.utcnow() - timedelta(seconds=20)
-
-    # Filter events with timestamp newer than cutoff
-    events = list(mongo.db.events.find({
-        "timestamp": {"$gt": cutoff_time}
-    }).sort('_id', -1).limit(10))
-
-    # Convert to response format
-    for e in events:
-        e['_id'] = str(e['_id'])
-        # Format timestamp for display
-        e['timestamp'] = e['timestamp'].strftime('%d %B %Y - %I:%M %p UTC')
+    global sent_event_ids
     
-    return jsonify(events)
+    # Get all recent events (last 5 minutes to ensure we don't miss any)
+    cutoff_time = datetime.utcnow() - timedelta(seconds=15)
+    
+    # Fetch events from database
+    all_events = list(mongo.db.events.find({
+        "timestamp": {"$gt": cutoff_time}
+    }).sort('_id', -1))
+    
+    # Filter out events that have already been sent
+    new_events = []
+    for event in all_events:
+        event_id = str(event['_id'])
+        if event_id not in sent_event_ids:
+            new_events.append(event)
+            sent_event_ids.add(event_id)
+    
+    # Clean up old IDs from sent_event_ids to prevent memory leaks
+    # Remove IDs older than 10 mins
+    old_cutoff = datetime.utcnow() - timedelta(minutes=10)
+    old_events = list(mongo.db.events.find({
+        "timestamp": {"$lt": old_cutoff}
+    }))
+    
+    for old_event in old_events:
+        sent_event_ids.discard(str(old_event['_id']))
+    
+    # Format response
+    for event in new_events:
+        event['_id'] = str(event['_id'])
+        event['timestamp'] = event['timestamp'].strftime('%d %B %Y - %I:%M %p UTC')
+    
+    return jsonify(new_events)
+
+
+@webhook.route('/events/reset', methods=['POST'])
+def reset_sent_events():
+    """Optional endpoint to reset the sent events tracking (useful for testing)"""
+    global sent_event_ids
+    sent_event_ids.clear()
+    return jsonify({"msg": "Sent events tracking reset"}), 200
