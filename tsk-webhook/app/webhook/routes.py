@@ -45,7 +45,7 @@ def github_webhook():
 def get_events():
     global sent_event_ids
     
-    # Get all recent events (last 5 minutes to ensure we don't miss any)
+    # Get all recent events (last 15 seconds to ensure we don't miss any)
     cutoff_time = datetime.utcnow() - timedelta(seconds=15)
     
     # Fetch events from database
