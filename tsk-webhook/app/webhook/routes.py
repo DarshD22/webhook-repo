@@ -16,7 +16,7 @@ def github_webhook():
             "author": payload['pusher']['name'],
             "from_branch": None,
             "to_branch": payload['ref'].split('/')[-1],
-            "timestamp": datetime.utcnow().strftime('%d %B %Y - %I:%M %p UTC')
+            "timestamp": datetime.utcnow()  # Store as datetime object
         }
 
     elif 'pull_request' in payload:
@@ -28,7 +28,7 @@ def github_webhook():
             "author": pr['user']['login'],
             "from_branch": pr['head']['ref'],
             "to_branch": pr['base']['ref'],
-            "timestamp": datetime.utcnow().strftime('%d %B %Y - %I:%M %p UTC')
+            "timestamp": datetime.utcnow()  # Store as datetime object
         }
 
     else:
@@ -40,15 +40,18 @@ def github_webhook():
 
 @webhook.route('/events', methods=['GET'])
 def get_events():
-    # Only fetch events from the last 20 seconds (slightly more than 15s buffer)
-    cutoff_time = (datetime.utcnow() - timedelta(seconds=20)).strftime('%d %B %Y - %I:%M %p UTC')
+    # Only fetch events from the last 20 seconds
+    cutoff_time = datetime.utcnow() - timedelta(seconds=20)
 
     # Filter events with timestamp newer than cutoff
     events = list(mongo.db.events.find({
         "timestamp": {"$gt": cutoff_time}
     }).sort('_id', -1).limit(10))
 
+    # Convert to response format
     for e in events:
         e['_id'] = str(e['_id'])
+        # Format timestamp for display
+        e['timestamp'] = e['timestamp'].strftime('%d %B %Y - %I:%M %p UTC')
+    
     return jsonify(events)
-
