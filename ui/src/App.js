@@ -1,13 +1,24 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 
 function App() {
   const [events, setEvents] = useState([]);
+  const displayedIdsRef = useRef(new Set());
 
   const fetchEvents = async () => {
     try {
       const res = await fetch("https://webhook-repo-8ccs.onrender.com/events");
       const data = await res.json();
-      setEvents(data);
+
+      // Filter out events already shown based on _id
+      const newEvents = data.filter(event => !displayedIdsRef.current.has(event._id));
+
+      if (newEvents.length > 0) {
+        // Update the set of displayed IDs
+        newEvents.forEach(event => displayedIdsRef.current.add(event._id));
+
+        // Add new events to top of the feed
+        setEvents(prevEvents => [...newEvents, ...prevEvents]);
+      }
     } catch (err) {
       console.error("Error fetching events:", err);
     }
@@ -37,7 +48,7 @@ function App() {
       <h2>GitHub Activity Feed</h2>
       <ul style={{ listStyle: "none", padding: 0 }}>
         {events.map((e, index) => (
-          <li key={index} style={{ margin: "10px 0" }}>
+          <li key={e._id || index} style={{ margin: "10px 0" }}>
             {renderMessage(e)}
           </li>
         ))}
