@@ -78,10 +78,3 @@ def get_events():
     
     return jsonify(new_events)
 
-
-@webhook.route('/events/reset', methods=['POST'])
-def reset_sent_events():
-    """Optional endpoint to reset the sent events tracking (useful for testing)"""
-    global sent_event_ids
-    sent_event_ids.clear()
-    return jsonify({"msg": "Sent events tracking reset"}), 200
