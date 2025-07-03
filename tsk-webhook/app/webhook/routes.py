@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from datetime import datetime
+from datetime import datetime, timedelta
 from app.extensions import mongo
 
 webhook = Blueprint('webhook', __name__)
@@ -37,9 +37,18 @@ def github_webhook():
     mongo.db.events.insert_one(entry)
     return jsonify({"msg": "Event stored"}), 200
 
+
 @webhook.route('/events', methods=['GET'])
 def get_events():
-    events = list(mongo.db.events.find().sort('_id', -1).limit(10))
+    # Only fetch events from the last 20 seconds (slightly more than 15s buffer)
+    cutoff_time = (datetime.utcnow() - timedelta(seconds=20)).strftime('%d %B %Y - %I:%M %p UTC')
+
+    # Filter events with timestamp newer than cutoff
+    events = list(mongo.db.events.find({
+        "timestamp": {"$gt": cutoff_time}
+    }).sort('_id', -1).limit(10))
+
     for e in events:
         e['_id'] = str(e['_id'])
     return jsonify(events)
+
